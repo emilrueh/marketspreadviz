@@ -5,8 +5,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TICKER_MAP = dict(CL="CL=F", BZ="BZ=F", NG="NG=F", TTF="TTF=F")
 
 SPREAD_PAIRS = dict(
-    oil=dict(numerator="BZ=F", denominator="CL=F", label="Brent / WTI", name_a="Brent (BZ1!)", name_b="WTI (CL1!)"),
-    gas=dict(numerator="TTF=F", denominator="NG=F", label="TTF / Henry Hub", name_a="TTF (TTF1!)", name_b="Henry Hub (NG1!)"),
+    oil=dict(numerator="BZ=F", denominator="CL=F", label="Brent / WTI",
+             name_a="Brent (BZ1!)", name_b="WTI (CL1!)", category="oil markets"),
+    gas=dict(numerator="TTF=F", denominator="NG=F", label="TTF / Henry Hub",
+             name_a="TTF (TTF1!)", name_b="Henry Hub (NG1!)", category="natural gas markets"),
 )
 
 DATA_DIR = PROJECT_ROOT / "data"

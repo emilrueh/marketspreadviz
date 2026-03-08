@@ -1,3 +1,20 @@
+import logging
+from datetime import datetime
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+    handlers=[
+        logging.FileHandler(LOG_DIR / "app.log"),
+    ],
+)
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 
@@ -5,6 +22,9 @@ from src.utils import TICKER_MAP, SPREAD_PAIRS, FRONTEND_DIR, DEFAULT_PERIOD, DE
 from src.models import PricePoint, PriceResponse
 from src.analysis import build_spread_response
 from src.fetcher import fetch_ticker_data
+from src.news import fetch_spike_news
+
+load_dotenv()
 
 app = FastAPI(title="MarketSpreadViz")
 
@@ -44,6 +64,24 @@ def get_price(
     ]
 
     return PriceResponse(ticker=ticker, period=period, data=data)
+
+
+@app.get("/api/news/{pair}/{date}")
+async def get_spike_news(
+    pair: str,
+    date: str,
+    direction: str = Query(default="up"),
+):
+    if pair not in SPREAD_PAIRS:
+        raise HTTPException(status_code=404, detail=f"Unknown pair: {pair}. Use: {list(SPREAD_PAIRS.keys())}")
+
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    pair_config = SPREAD_PAIRS[pair]
+    return await fetch_spike_news(pair, date, direction, pair_config)
 
 
 if __name__ == "__main__":

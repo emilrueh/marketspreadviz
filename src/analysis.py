@@ -78,7 +78,7 @@ def build_spread_response(
         spikes.append(
             SpikeAnnotation(
                 date=spread_index[idx].strftime("%Y-%m-%d"),
-                z_score=round(float(spread_values[idx]), 3),
+                value=round(float(spread_values[idx]), 3),
                 direction="down",
             )
         )
@@ -86,7 +86,7 @@ def build_spread_response(
         spikes.append(
             SpikeAnnotation(
                 date=spread_index[idx].strftime("%Y-%m-%d"),
-                z_score=round(float(spread_values[idx]), 3),
+                value=round(float(spread_values[idx]), 3),
                 direction="up",
             )
         )

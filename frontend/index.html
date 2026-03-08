@@ -102,6 +102,149 @@
             width: 100%;
             height: calc(100vh - 100px);
         }
+
+        /* News side panel */
+        .news-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 380px;
+            height: 100vh;
+            background: #1e222d;
+            border-left: 1px solid #2a2e39;
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .news-panel.open {
+            transform: translateX(0);
+        }
+
+        .news-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-bottom: 1px solid #2a2e39;
+            flex-shrink: 0;
+        }
+
+        .news-panel-header span {
+            font-size: 14px;
+            font-weight: 600;
+            color: #d1d4dc;
+        }
+
+        .news-panel-header button {
+            background: none;
+            border: none;
+            color: #787b86;
+            font-size: 22px;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .news-panel-header button:hover {
+            color: #d1d4dc;
+        }
+
+        #news-panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+        }
+
+        .news-synthesis {
+            background: #131722;
+            border: 1px solid #2962ff;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #d1d4dc;
+        }
+
+        .news-card {
+            background: #131722;
+            border: 1px solid #2a2e39;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .news-card a {
+            color: #42a5f5;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.3;
+            display: block;
+        }
+
+        .news-card a:hover {
+            text-decoration: underline;
+        }
+
+        .news-card .news-date {
+            font-size: 11px;
+            color: #787b86;
+            margin-top: 4px;
+        }
+
+        .news-card .news-snippet {
+            font-size: 12px;
+            color: #9598a1;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
+        /* Loading skeleton */
+        .skeleton-card {
+            background: #131722;
+            border: 1px solid #2a2e39;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .skeleton-line {
+            height: 12px;
+            background: #2a2e39;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+
+        .skeleton-line:last-child {
+            width: 60%;
+            margin-bottom: 0;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        /* Hover tooltip */
+        .hover-tooltip {
+            position: fixed;
+            max-width: 360px;
+            background: #1e222d;
+            border: 1px solid #2a2e39;
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #d1d4dc;
+            pointer-events: none;
+            z-index: 2000;
+            display: none;
+        }
     </style>
 </head>
 
@@ -131,28 +274,128 @@
     </div>
     <div id="chart"></div>
 
+    <div id="news-panel" class="news-panel">
+        <div class="news-panel-header">
+            <span id="news-panel-title">News</span>
+            <button id="news-panel-close">&times;</button>
+        </div>
+        <div id="news-panel-body"></div>
+    </div>
+    <div id="hover-tooltip" class="hover-tooltip"></div>
+
     <script>
         const state = { tab: "oil" };
+        const newsCache = {};
+        let tooltipMouseHandler = null;
+
+        function escapeHtml(str) {
+            const el = document.createElement("span");
+            el.textContent = str;
+            return el.innerHTML;
+        }
+
+        function formatDate(dateStr) {
+            const [y, m, d] = dateStr.split("-").map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+        }
+
+        function cleanupTooltipHandler() {
+            if (tooltipMouseHandler) {
+                document.removeEventListener("mousemove", tooltipMouseHandler);
+                tooltipMouseHandler = null;
+            }
+            hoverTooltip.style.display = "none";
+        }
 
         const tabBar = document.getElementById("tab-bar");
         const sensitivitySlider = document.getElementById("sensitivity");
         const sensitivityDisplay = document.getElementById("sensitivity-display");
         const periodSelect = document.getElementById("period");
+        const newsPanel = document.getElementById("news-panel");
+        const newsPanelTitle = document.getElementById("news-panel-title");
+        const newsPanelBody = document.getElementById("news-panel-body");
+        const newsPanelClose = document.getElementById("news-panel-close");
+        const hoverTooltip = document.getElementById("hover-tooltip");
 
         const darkLayout = {
             paper_bgcolor: "#131722",
             plot_bgcolor: "#131722",
             font: { color: "#d1d4dc" },
-            xaxis: { gridcolor: "#1e222d", linecolor: "#2a2e39" },
+            xaxis: {
+                gridcolor: "#1e222d",
+                linecolor: "#2a2e39",
+                showspikes: true,
+                spikemode: "across",
+                spikesnap: "cursor",
+                spikecolor: "#787b86",
+                spikethickness: 1,
+                spikedash: "dot",
+            },
             yaxis: { gridcolor: "#1e222d", linecolor: "#2a2e39" },
+            hovermode: "closest",
             margin: { t: 48, r: 64, b: 48, l: 64 },
         };
+
+        newsPanelClose.addEventListener("click", () => {
+            newsPanel.classList.remove("open");
+            document.getElementById("chart").style.width = "100%";
+            Plotly.Plots.resize("chart");
+        });
+
+        function closeNewsPanel() {
+            newsPanel.classList.remove("open");
+            document.getElementById("chart").style.width = "100%";
+            Plotly.Plots.resize("chart");
+        }
+
+        function showLoadingSkeleton() {
+            newsPanelBody.innerHTML = Array(3).fill(
+                '<div class="skeleton-card"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>'
+            ).join("");
+        }
+
+        function renderNewsPanel(data) {
+            let html = "";
+            if (data.summary) {
+                html += `<div class="news-synthesis" style="font-weight:600">${escapeHtml(data.summary)}</div>`;
+            }
+            if (data.detail) {
+                html += `<div class="news-detail" style="font-size:13px;line-height:1.5;color:#9598a1;padding:0 2px 12px;">${escapeHtml(data.detail)}</div>`;
+            }
+            for (const a of (data.articles || [])) {
+                const hasMetadata = a.title && a.title !== a.url;
+                html += `<div class="news-card">`;
+                html += `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(hasMetadata ? a.title : new URL(a.url).hostname)}</a>`;
+                if (a.date) html += `<div class="news-date">${escapeHtml(formatDate(a.date))}</div>`;
+                if (a.snippet) html += `<div class="news-snippet">${escapeHtml(a.snippet)}</div>`;
+                html += `</div>`;
+            }
+            if (!(data.articles || []).length && !data.summary) {
+                html = '<div style="color:#787b86;font-size:13px;padding:12px;">No news found for this event.</div>';
+            }
+            newsPanelBody.innerHTML = html;
+        }
+
+        async function fetchSpikeNews(pair, date, direction) {
+            const key = `${pair}_${date}`;
+            if (newsCache[key]) return newsCache[key];
+            try {
+                const res = await fetch(`/api/news/${pair}/${date}?direction=${direction}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                newsCache[key] = data;
+                return data;
+            } catch (err) {
+                return { summary: "Failed to load news", detail: err.message, articles: [] };
+            }
+        }
 
         tabBar.querySelectorAll("button").forEach(btn => {
             btn.addEventListener("click", () => {
                 tabBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
                 btn.classList.add("active");
                 state.tab = btn.dataset.tab;
+                closeNewsPanel();
                 fetchAndRender();
             });
         });
@@ -160,39 +403,53 @@
         sensitivitySlider.addEventListener("input", () => {
             sensitivityDisplay.textContent = sensitivitySlider.value;
         });
-        sensitivitySlider.addEventListener("change", fetchAndRender);
-        periodSelect.addEventListener("change", fetchAndRender);
+        sensitivitySlider.addEventListener("change", () => { closeNewsPanel(); fetchAndRender(); });
+        periodSelect.addEventListener("change", () => { closeNewsPanel(); fetchAndRender(); });
 
         async function fetchAndRender() {
+            cleanupTooltipHandler();
             const sensitivity = sensitivitySlider.value;
             const period = periodSelect.value;
             const url = `/api/spread/${state.tab}?sensitivity=${sensitivity}&window=30&period=${period}`;
 
-            const res = await fetch(url);
-            const json = await res.json();
+            let res, json;
+            try {
+                res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                json = await res.json();
+            } catch (err) {
+                document.getElementById("chart").innerHTML =
+                    `<div style="color:#ef5350;padding:48px;text-align:center;">Failed to load data: ${escapeHtml(err.message)}</div>`;
+                return;
+            }
 
             const dates = json.data.map(d => d.date);
             const growthA = json.data.map(d => d.growth_a);
             const growthB = json.data.map(d => d.growth_b);
             const growthSpread = json.data.map(d => d.growth_spread);
 
+            const colorA = "rgba(255, 167, 38, 0.7)";
+            const colorB = "rgba(38, 198, 218, 0.7)";
+            const colorA_solid = "#ffa726";
+            const colorB_solid = "#26c6da";
+
             const traceA = {
                 x: dates, y: growthA,
                 type: "scatter", mode: "lines",
-                line: { color: "rgba(255, 255, 255, 0.5)", width: 1.5 },
+                line: { color: colorA, width: 1.5 },
                 name: json.name_a,
             };
             const traceB = {
                 x: dates, y: growthB,
                 type: "scatter", mode: "lines",
-                line: { color: "rgba(150, 150, 150, 0.5)", width: 1.5 },
+                line: { color: colorB, width: 1.5 },
                 name: json.name_b,
             };
             const traceSpread = {
                 x: dates, y: growthSpread,
                 type: "scatter", mode: "lines",
                 line: { color: "rgba(66, 165, 245, 0.9)", width: 2.5 },
-                name: "Spread",
+                name: "Relative",
                 yaxis: "y2",
             };
 
@@ -205,18 +462,24 @@
             const traceUp = {
                 x: upSpikes.map(s => s.date),
                 y: upSpikes.map(s => spreadByDate[s.date] - arrowOffset),
+                customdata: upSpikes.map(s => ({ date: s.date, value: s.value, direction: "up" })),
                 type: "scatter", mode: "markers",
-                marker: { symbol: "triangle-up", size: 13, color: "#00e676" },
+                marker: { symbol: "triangle-up", size: 13, color: colorA_solid },
                 showlegend: false,
+                hoverinfo: "none",
                 yaxis: "y2",
+                meta: "arrow_up",
             };
             const traceDown = {
                 x: downSpikes.map(s => s.date),
                 y: downSpikes.map(s => spreadByDate[s.date] + arrowOffset),
+                customdata: downSpikes.map(s => ({ date: s.date, value: s.value, direction: "down" })),
                 type: "scatter", mode: "markers",
-                marker: { symbol: "triangle-down", size: 13, color: "#ef5350" },
+                marker: { symbol: "triangle-down", size: 13, color: colorB_solid },
                 showlegend: false,
+                hoverinfo: "none",
                 yaxis: "y2",
+                meta: "arrow_down",
             };
 
             const yAB = [...growthA, ...growthB];
@@ -231,14 +494,14 @@
 
             const layout = {
                 ...darkLayout,
-                title: { text: json.label + " — Spread", font: { size: 16, color: "#d1d4dc" } },
+                title: { text: json.label, font: { size: 16, color: "#d1d4dc" } },
                 yaxis: {
                     ...darkLayout.yaxis,
                     title: "Price Change %",
                     range: [yABMin - yABPad * 2, yABMax + yABPad * 2],
                 },
                 yaxis2: {
-                    title: "Spread Δ %",
+                    title: json.label.replace(" / ", " vs ") + " %",
                     side: "right",
                     overlaying: "y",
                     gridcolor: "transparent",
@@ -251,6 +514,61 @@
             };
 
             Plotly.newPlot("chart", [traceA, traceB, traceSpread, traceUp, traceDown], layout, { responsive: true });
+
+            const chartEl = document.getElementById("chart");
+
+            chartEl.on("plotly_click", async (eventData) => {
+                const point = eventData.points[0];
+                const meta = point.data.meta;
+                if (meta !== "arrow_up" && meta !== "arrow_down") return;
+                const direction = meta === "arrow_up" ? "up" : "down";
+                const date = point.x;
+
+                newsPanelTitle.textContent = `${json.label} — ${formatDate(date)}`;
+                newsPanel.classList.add("open");
+                document.getElementById("chart").style.width = "calc(100% - 380px)";
+                Plotly.Plots.resize("chart");
+                showLoadingSkeleton();
+
+                const data = await fetchSpikeNews(state.tab, date, direction);
+                renderNewsPanel(data);
+            });
+
+            chartEl.on("plotly_hover", (eventData) => {
+                const point = eventData.points[0];
+                const meta = point.data.meta;
+                if (meta !== "arrow_up" && meta !== "arrow_down") return;
+
+                const spike = point.customdata;
+                const key = `${state.tab}_${spike.date}`;
+                const cached = newsCache[key];
+                const arrow = spike.direction === "up"
+                    ? `▲ ${json.name_a} leading`
+                    : `▼ ${json.name_b} leading`;
+
+                let html = `<div style="font-weight:600;margin-bottom:4px">${escapeHtml(formatDate(spike.date))}</div>`;
+                html += `<div style="color:#787b86;font-size:11px">${spike.value.toFixed(2)}% &middot; ${arrow}</div>`;
+                if (cached?.summary) {
+                    html += `<div style="margin-top:6px;border-top:1px solid #2a2e39;padding-top:6px">${escapeHtml(cached.summary)}</div>`;
+                } else {
+                    html += `<div style="margin-top:6px;color:#787b86;font-style:italic">Click for news</div>`;
+                }
+                hoverTooltip.innerHTML = html;
+
+                if (tooltipMouseHandler) {
+                    document.removeEventListener("mousemove", tooltipMouseHandler);
+                }
+                tooltipMouseHandler = (e) => {
+                    hoverTooltip.style.left = (e.clientX + 16) + "px";
+                    hoverTooltip.style.top = (e.clientY - 10) + "px";
+                };
+                document.addEventListener("mousemove", tooltipMouseHandler);
+                hoverTooltip.style.display = "block";
+            });
+
+            chartEl.on("plotly_unhover", () => {
+                cleanupTooltipHandler();
+            });
         }
 
         fetchAndRender();

@@ -22,7 +22,7 @@ class SpreadPoint(BaseModel):
 
 class SpikeAnnotation(BaseModel):
     date: str
-    z_score: float
+    value: float
     direction: Literal["up", "down"]
 
 
@@ -38,3 +38,19 @@ class SpreadResponse(BaseModel):
     prominence: float
     data: list[SpreadPoint]
     spikes: list[SpikeAnnotation]
+
+
+class NewsArticle(BaseModel):
+    title: str
+    url: str
+    snippet: str = ""
+    date: str = ""
+
+
+class SpikeNewsResponse(BaseModel):
+    pair: str
+    date: str
+    direction: Literal["up", "down"]
+    summary: str
+    detail: str
+    articles: list[NewsArticle] = []
