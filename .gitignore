@@ -97,3 +97,7 @@ yarn-error.log*
 # Backup files
 *.bak
 *.backup
+
+# Data cache
+data/
+*.csv

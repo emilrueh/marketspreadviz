@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarketSpreadViz</title>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #131722;
+            color: #d1d4dc;
+            min-height: 100vh;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            padding: 12px 24px 0;
+            background: #0b0e14;
+        }
+
+        .tab-bar button {
+            padding: 10px 24px;
+            border: 1px solid #2a2e39;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #1e222d;
+            color: #787b86;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+
+        .tab-bar button:hover {
+            color: #d1d4dc;
+        }
+
+        .tab-bar button.active {
+            background: #131722;
+            color: #d1d4dc;
+            border-color: #2962ff;
+        }
+
+        .controls {
+            display: flex;
+            gap: 20px;
+            padding: 10px 24px;
+            background: #1e222d;
+            border-bottom: 1px solid #2a2e39;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .controls label {
+            font-size: 13px;
+            color: #787b86;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: help;
+        }
+
+        .controls select {
+            background: #131722;
+            color: #d1d4dc;
+            border: 1px solid #2a2e39;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 13px;
+        }
+
+        .controls input[type="range"] {
+            width: 140px;
+            accent-color: #2962ff;
+        }
+
+        .range-labels {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #787b86;
+        }
+
+        .range-labels .value {
+            font-size: 13px;
+            color: #2962ff;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        #chart {
+            width: 100%;
+            height: calc(100vh - 100px);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="tab-bar" id="tab-bar">
+        <button data-tab="oil" class="active">Oil</button>
+        <button data-tab="gas">Gas</button>
+    </div>
+    <div class="controls" id="controls">
+        <label title="How many divergence spikes to flag (1 = strict, 10 = sensitive)">Sensitivity:
+            <span class="range-labels">
+                Fewer
+                <input type="range" id="sensitivity" min="1" max="10" step="1" value="5">
+                More
+                <span class="value" id="sensitivity-display">5</span>
+            </span>
+        </label>
+        <label title="How far back to fetch price data">Period:
+            <select id="period">
+                <option value="3mo">3 Months</option>
+                <option value="6mo">6 Months</option>
+                <option value="1y" selected>1 Year</option>
+                <option value="2y">2 Years</option>
+                <option value="5y">5 Years</option>
+            </select>
+        </label>
+    </div>
+    <div id="chart"></div>
+
+    <script>
+        const state = { tab: "oil" };
+
+        const tabBar = document.getElementById("tab-bar");
+        const sensitivitySlider = document.getElementById("sensitivity");
+        const sensitivityDisplay = document.getElementById("sensitivity-display");
+        const periodSelect = document.getElementById("period");
+
+        const darkLayout = {
+            paper_bgcolor: "#131722",
+            plot_bgcolor: "#131722",
+            font: { color: "#d1d4dc" },
+            xaxis: { gridcolor: "#1e222d", linecolor: "#2a2e39" },
+            yaxis: { gridcolor: "#1e222d", linecolor: "#2a2e39" },
+            margin: { t: 48, r: 64, b: 48, l: 64 },
+        };
+
+        tabBar.querySelectorAll("button").forEach(btn => {
+            btn.addEventListener("click", () => {
+                tabBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                state.tab = btn.dataset.tab;
+                fetchAndRender();
+            });
+        });
+
+        sensitivitySlider.addEventListener("input", () => {
+            sensitivityDisplay.textContent = sensitivitySlider.value;
+        });
+        sensitivitySlider.addEventListener("change", fetchAndRender);
+        periodSelect.addEventListener("change", fetchAndRender);
+
+        async function fetchAndRender() {
+            const sensitivity = sensitivitySlider.value;
+            const period = periodSelect.value;
+            const url = `/api/spread/${state.tab}?sensitivity=${sensitivity}&window=30&period=${period}`;
+
+            const res = await fetch(url);
+            const json = await res.json();
+
+            const dates = json.data.map(d => d.date);
+            const growthA = json.data.map(d => d.growth_a);
+            const growthB = json.data.map(d => d.growth_b);
+            const growthSpread = json.data.map(d => d.growth_spread);
+
+            const traceA = {
+                x: dates, y: growthA,
+                type: "scatter", mode: "lines",
+                line: { color: "rgba(255, 255, 255, 0.5)", width: 1.5 },
+                name: json.name_a,
+            };
+            const traceB = {
+                x: dates, y: growthB,
+                type: "scatter", mode: "lines",
+                line: { color: "rgba(150, 150, 150, 0.5)", width: 1.5 },
+                name: json.name_b,
+            };
+            const traceSpread = {
+                x: dates, y: growthSpread,
+                type: "scatter", mode: "lines",
+                line: { color: "rgba(66, 165, 245, 0.9)", width: 2.5 },
+                name: "Spread",
+                yaxis: "y2",
+            };
+
+            const spreadByDate = Object.fromEntries(json.data.map(d => [d.date, d.growth_spread]));
+            const spreadRange = Math.max(...growthSpread) - Math.min(...growthSpread);
+            const arrowOffset = spreadRange * 0.04;
+            const upSpikes = json.spikes.filter(s => s.direction === "up");
+            const downSpikes = json.spikes.filter(s => s.direction === "down");
+
+            const traceUp = {
+                x: upSpikes.map(s => s.date),
+                y: upSpikes.map(s => spreadByDate[s.date] - arrowOffset),
+                type: "scatter", mode: "markers",
+                marker: { symbol: "triangle-up", size: 13, color: "#00e676" },
+                showlegend: false,
+                yaxis: "y2",
+            };
+            const traceDown = {
+                x: downSpikes.map(s => s.date),
+                y: downSpikes.map(s => spreadByDate[s.date] + arrowOffset),
+                type: "scatter", mode: "markers",
+                marker: { symbol: "triangle-down", size: 13, color: "#ef5350" },
+                showlegend: false,
+                yaxis: "y2",
+            };
+
+            const yAB = [...growthA, ...growthB];
+            const yABMin = Math.min(...yAB);
+            const yABMax = Math.max(...yAB);
+            const yABPad = (yABMax - yABMin) * 0.1;
+
+            const ySpread = growthSpread;
+            const ySpreadMin = Math.min(...ySpread);
+            const ySpreadMax = Math.max(...ySpread);
+            const ySpreadPad = (ySpreadMax - ySpreadMin) * 0.1;
+
+            const layout = {
+                ...darkLayout,
+                title: { text: json.label + " — Spread", font: { size: 16, color: "#d1d4dc" } },
+                yaxis: {
+                    ...darkLayout.yaxis,
+                    title: "Price Change %",
+                    range: [yABMin - yABPad * 2, yABMax + yABPad * 2],
+                },
+                yaxis2: {
+                    title: "Spread Δ %",
+                    side: "right",
+                    overlaying: "y",
+                    gridcolor: "transparent",
+                    linecolor: "#2a2e39",
+                    font: { color: "#d1d4dc" },
+                    range: [ySpreadMin - ySpreadPad * 2, ySpreadMax + ySpreadPad * 2],
+                },
+                showlegend: true,
+                legend: { x: 0, y: 1.12, orientation: "h", font: { size: 12, color: "#d1d4dc" } },
+            };
+
+            Plotly.newPlot("chart", [traceA, traceB, traceSpread, traceUp, traceDown], layout, { responsive: true });
+        }
+
+        fetchAndRender();
+    </script>
+</body>
+
+</html>
