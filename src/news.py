@@ -1,15 +1,26 @@
-import json, logging, os, re
+import logging, os, re
 from pathlib import Path
 
-import httpx
+from openai import AsyncOpenAI
 
-from src.models import NewsArticle, SpikeNewsResponse
+from src.models import AnalysisContent, NewsArticle, SpikeNewsResponse
 from src.utils import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
 NEWS_CACHE_DIR = DATA_DIR / "news"
-PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
+
+_client: AsyncOpenAI | None = None
+
+
+def _get_client() -> AsyncOpenAI:
+    global _client
+    if _client is None:
+        api_key = os.environ.get("PERPLEXITY_API_KEY")
+        if not api_key:
+            raise ValueError("PERPLEXITY_API_KEY not set.")
+        _client = AsyncOpenAI(base_url="https://api.perplexity.ai", api_key=api_key)
+    return _client
 
 
 def _strip_citations(text: str) -> str:
@@ -46,19 +57,17 @@ def _build_messages(pair_config: dict, date: str, direction: str) -> list[dict]:
     return [
         dict(
             role="system",
-            content=("You are a commodity market analyst. " "Respond in plain text only. No markdown formatting. No citation markers like [1][2]."),
+            content="You are a commodity market analyst. Respond in plain text only. No markdown formatting. No citation markers like [1][2]. Never mention specific dates. Keep it extremely short and concise.",
         ),
         dict(
             role="user",
-            content=(
-                f"What were the key developments in {category} around {date}? "
-                f"Consider supply/demand shifts, geopolitical events, production decisions, "
-                f"weather impacts, and macro trends. "
-                f"Then explain how these factors would have led to {performance} during this period."
-            ),
+            content=f"""
+What were the key developments in {category} around {date} and the previous and following days?
+Analyze supply/demand shifts, geopolitical events, production decisions, weather impacts, macro trends, and anything else that might be of relevance and consider the broader context.
+Then explain how these factors have led to {performance} during this period.
+""".strip(),
         ),
     ]
-
 
 
 async def fetch_spike_news(pair: str, date: str, direction: str, pair_config: dict) -> SpikeNewsResponse:
@@ -66,50 +75,22 @@ async def fetch_spike_news(pair: str, date: str, direction: str, pair_config: di
     if cached is not None:
         return cached
 
-    api_key = os.environ.get("PERPLEXITY_API_KEY")
-    if not api_key:
-        raise ValueError("PERPLEXITY_API_KEY not set. Add it to your .env file.")
-
-    payload = dict(
-        model="sonar",
-        messages=_build_messages(pair_config, date, direction),
-        max_tokens=400,
-    )
-
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                PERPLEXITY_API_URL,
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        client = _get_client()
+        completion = await client.beta.chat.completions.parse(
+            model="sonar",
+            messages=_build_messages(pair_config, date, direction),
+            response_format=AnalysisContent,
+        )
 
-        logger.info("Perplexity response keys: %s", list(data.keys()))
-        if "search_results" in data:
-            logger.info("search_results count: %d", len(data["search_results"]))
-        else:
-            logger.info("No search_results in response")
-        if "citations" in data:
-            logger.info("citations count: %d", len(data["citations"]))
-
-        content = data["choices"][0]["message"]["content"]
-        logger.info("Raw content: %s", content[:500])
-        try:
-            parsed = json.loads(content)
-            summary = _strip_citations(parsed["summary"])
-            detail = _strip_citations(parsed["detail"])
-        except (json.JSONDecodeError, KeyError):
-            logger.warning("JSON parse failed, extracting from raw text")
-            summary = _strip_citations(content[:200])
-            detail = _strip_citations(content)
+        analysis = completion.choices[0].message.parsed
+        single_exact_reason = _strip_citations(analysis.single_exact_reason)
+        detailed_summary = _strip_citations(analysis.detailed_summary)
 
         articles = []
-        for result in data.get("search_results", []):
+        search_results = getattr(completion, "model_extra", {}).get("search_results", [])
+        logger.info("model_extra keys: %s", list(getattr(completion, "model_extra", {}).keys()))
+        for result in search_results:
             articles.append(
                 NewsArticle(
                     title=result.get("title", result.get("url", "")),
@@ -123,21 +104,21 @@ async def fetch_spike_news(pair: str, date: str, direction: str, pair_config: di
             pair=pair,
             date=date,
             direction=direction,
-            summary=summary,
-            detail=detail,
+            single_exact_reason=single_exact_reason,
+            detailed_summary=detailed_summary,
             articles=articles,
         )
         _save_cache(response)
         return response
 
+    except ValueError:
+        raise
     except Exception as exc:
-        if isinstance(exc, ValueError):
-            raise
         logger.exception("Perplexity API error for %s/%s", pair, date)
         return SpikeNewsResponse(
             pair=pair,
             date=date,
             direction=direction,
-            summary="Failed to fetch news analysis",
-            detail=str(exc),
+            single_exact_reason="Failed to fetch news analysis",
+            detailed_summary=str(exc),
         )

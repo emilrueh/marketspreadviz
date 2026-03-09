@@ -40,6 +40,11 @@ class SpreadResponse(BaseModel):
     spikes: list[SpikeAnnotation]
 
 
+class AnalysisContent(BaseModel):
+    single_exact_reason: str
+    detailed_summary: str
+
+
 class NewsArticle(BaseModel):
     title: str
     url: str
@@ -51,6 +56,6 @@ class SpikeNewsResponse(BaseModel):
     pair: str
     date: str
     direction: Literal["up", "down"]
-    summary: str
-    detail: str
+    single_exact_reason: str
+    detailed_summary: str
     articles: list[NewsArticle] = []

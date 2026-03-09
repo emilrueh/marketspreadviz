@@ -17,6 +17,7 @@ logging.basicConfig(
 )
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.utils import TICKER_MAP, SPREAD_PAIRS, FRONTEND_DIR, DEFAULT_PERIOD, DEFAULT_SENSITIVITY, DEFAULT_ROLLING_WINDOW
 from src.models import PricePoint, PriceResponse
@@ -82,6 +83,9 @@ async def get_spike_news(
 
     pair_config = SPREAD_PAIRS[pair]
     return await fetch_spike_news(pair, date, direction, pair_config)
+
+
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 
 if __name__ == "__main__":
