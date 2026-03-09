@@ -93,6 +93,15 @@ body {
     cursor: help;
 }
 
+.controls select,
+.controls input[type="range"] {
+    cursor: pointer;
+}
+
+.controls input[type="range"]:active {
+    cursor: grabbing;
+}
+
 .controls select {
     background: var(--bg-page);
     color: var(--text-primary);
@@ -125,6 +134,21 @@ body {
 #chart {
     width: 100%;
     height: calc(100vh - 100px);
+}
+
+#chart .drag,
+#chart .nsewdrag {
+    cursor: crosshair !important;
+}
+
+#chart.dragging .drag,
+#chart.dragging .nsewdrag {
+    cursor: grabbing !important;
+}
+
+#chart.hovering-arrow .drag,
+#chart.hovering-arrow .nsewdrag {
+    cursor: pointer !important;
 }
 
 /* News side panel */

@@ -37,7 +37,7 @@ def serve_frontend():
 
 @app.get("/api/pairs")
 def get_pairs():
-    return [dict(key=k, label=v["label"]) for k, v in SPREAD_PAIRS.items()]
+    return [dict(key=k, label=v["label"], tab=v["tab"]) for k, v in SPREAD_PAIRS.items()]
 
 
 @app.get("/api/spread/{pair}")

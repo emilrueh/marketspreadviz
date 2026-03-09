@@ -139,7 +139,7 @@ async function initTabs() {
     pairs.forEach((pair, i) => {
         const btn = document.createElement("button");
         btn.dataset.tab = pair.key;
-        btn.textContent = pair.key.charAt(0).toUpperCase() + pair.key.slice(1);
+        btn.textContent = pair.tab;
         if (i === 0) btn.classList.add("active");
         btn.addEventListener("click", () => {
             tabBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
@@ -318,10 +318,17 @@ async function fetchAndRender() {
         renderNewsPanel(data);
     });
 
+    chartEl.addEventListener("mousedown", () => chartEl.classList.add("dragging"), true);
+    window.addEventListener("mouseup", () => chartEl.classList.remove("dragging"));
+
     chartEl.on("plotly_hover", (eventData) => {
         const point = eventData.points[0];
         const meta = point.data.meta;
-        if (meta !== "arrow_up" && meta !== "arrow_down") return;
+        if (meta !== "arrow_up" && meta !== "arrow_down") {
+            chartEl.classList.remove("hovering-arrow");
+            return;
+        }
+        chartEl.classList.add("hovering-arrow");
 
         const spike = point.customdata;
         const key = `${state.tab}_${spike.date}`;
@@ -351,6 +358,7 @@ async function fetchAndRender() {
     });
 
     chartEl.on("plotly_unhover", () => {
+        chartEl.classList.remove("hovering-arrow");
         cleanupTooltipHandler();
     });
 }
