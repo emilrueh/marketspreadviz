@@ -35,6 +35,11 @@ def serve_frontend():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
+@app.get("/api/pairs")
+def get_pairs():
+    return [dict(key=k, label=v["label"]) for k, v in SPREAD_PAIRS.items()]
+
+
 @app.get("/api/spread/{pair}")
 def get_spread(
     pair: str,

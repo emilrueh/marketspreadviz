@@ -1,13 +1,34 @@
 :root {
+    /* backgrounds */
     --bg-page: #131722;
     --bg-panel: #1e222d;
     --bg-header: #0b0e14;
+
+    /* borders & grid */
     --border: #2a2e39;
+    --grid: #1e222d;
+
+    /* text */
     --text-primary: #d1d4dc;
     --text-secondary: #787b86;
     --text-muted: #9598a1;
+
+    /* accent */
     --accent: #2962ff;
     --link: #42a5f5;
+    --error: #ef5350;
+
+    /* chart lines */
+    --color-a: rgba(38, 255, 136, 0.6);
+    --color-b: rgba(201, 38, 255, 0.6);
+    --color-spread: rgba(66, 179, 245, 0.9);
+    --ticker-line-width: 1.5;
+    --spread-line-width: 2.0;
+
+    /* spike crosshair */
+    --spike-color: #787b86;
+    --spike-thickness: 1;
+    --spike-dash: dot;
 }
 
 * {

@@ -1,36 +1,25 @@
+const windowDefaults = { "1mo": 2, "3mo": 2, "6mo": 5, "1y": 60, "2y": 120, "5y": 240 };
+
+const _css = (prop) => getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
+
 const theme = {
-    // backgrounds
-    pageBg: "#131722",
-    panelBg: "#1e222d",
-    headerBg: "#0b0e14",
-
-    // borders & grid
-    border: "#2a2e39",
-    grid: "#1e222d",
-
-    // text
-    textPrimary: "#d1d4dc",
-    textSecondary: "#787b86",
-    textMuted: "#9598a1",
-
-    // accent
-    accent: "#2962ff",
-    link: "#42a5f5",
-    error: "#ef5350",
-
-    // chart lines
-    colorBrent: "rgba(38, 255, 136, 0.6)",
-    colorWTI: "rgba(201, 38, 255, 0.6)",
-    colorSpread: "rgba(66, 179, 245, 0.9)",
-
-    // chart line widths
-    tickerLineWidth: 1.5,
-    spreadLineWidth: 2.0,
-
-    // spike crosshair
-    spikeColor: "#787b86",
-    spikeThickness: 1,
-    spikeDash: "dot",
+    get pageBg() { return _css("--bg-page"); },
+    get panelBg() { return _css("--bg-panel"); },
+    get border() { return _css("--border"); },
+    get grid() { return _css("--grid"); },
+    get textPrimary() { return _css("--text-primary"); },
+    get textSecondary() { return _css("--text-secondary"); },
+    get textMuted() { return _css("--text-muted"); },
+    get accent() { return _css("--accent"); },
+    get error() { return _css("--error"); },
+    get colorA() { return _css("--color-a"); },
+    get colorB() { return _css("--color-b"); },
+    get colorSpread() { return _css("--color-spread"); },
+    get tickerLineWidth() { return parseFloat(_css("--ticker-line-width")); },
+    get spreadLineWidth() { return parseFloat(_css("--spread-line-width")); },
+    get spikeColor() { return _css("--spike-color"); },
+    get spikeThickness() { return parseFloat(_css("--spike-thickness")); },
+    get spikeDash() { return _css("--spike-dash"); },
 };
 
 const state = { tab: "oil" };
@@ -63,7 +52,6 @@ const periodSelect = document.getElementById("period");
 const windowSlider = document.getElementById("window");
 const windowDisplay = document.getElementById("window-display");
 
-const windowDefaults = { "1mo": 2, "3mo": 2, "6mo": 5, "1y": 30, "2y": 60, "5y": 120 };
 const newsPanel = document.getElementById("news-panel");
 const newsPanelTitle = document.getElementById("news-panel-title");
 const newsPanelBody = document.getElementById("news-panel-body");
@@ -144,15 +132,34 @@ async function fetchSpikeNews(pair, date, direction) {
     }
 }
 
-tabBar.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", () => {
-        tabBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        state.tab = btn.dataset.tab;
-        closeNewsPanel();
-        fetchAndRender();
+async function initTabs() {
+    const res = await fetch("/api/pairs");
+    const pairs = await res.json();
+
+    pairs.forEach((pair, i) => {
+        const btn = document.createElement("button");
+        btn.dataset.tab = pair.key;
+        btn.textContent = pair.key.charAt(0).toUpperCase() + pair.key.slice(1);
+        if (i === 0) btn.classList.add("active");
+        btn.addEventListener("click", () => {
+            tabBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            state.tab = btn.dataset.tab;
+            closeNewsPanel();
+            fetchAndRender();
+        });
+        tabBar.appendChild(btn);
     });
-});
+
+    state.tab = pairs[0].key;
+
+    const defaultWindow = windowDefaults[periodSelect.value] || 30;
+    windowSlider.max = Math.max(defaultWindow * 2, 10);
+    windowSlider.value = defaultWindow;
+    windowDisplay.textContent = defaultWindow;
+
+    fetchAndRender();
+}
 
 sensitivitySlider.addEventListener("input", () => {
     sensitivityDisplay.textContent = sensitivitySlider.value;
@@ -198,13 +205,13 @@ async function fetchAndRender() {
     const traceA = {
         x: dates, y: growthA,
         type: "scatter", mode: "lines",
-        line: { color: theme.colorBrent, width: theme.tickerLineWidth },
+        line: { color: theme.colorA, width: theme.tickerLineWidth },
         name: json.name_a,
     };
     const traceB = {
         x: dates, y: growthB,
         type: "scatter", mode: "lines",
-        line: { color: theme.colorWTI, width: theme.tickerLineWidth },
+        line: { color: theme.colorB, width: theme.tickerLineWidth },
         name: json.name_b,
     };
     const traceSpread = {
@@ -212,6 +219,7 @@ async function fetchAndRender() {
         type: "scatter", mode: "lines",
         line: { color: theme.colorSpread, width: theme.spreadLineWidth },
         name: "Relative",
+        legendgroup: "spread",
         yaxis: "y2",
     };
 
@@ -226,8 +234,9 @@ async function fetchAndRender() {
         y: upSpikes.map(s => spreadByDate[s.date] - arrowOffset),
         customdata: upSpikes.map(s => ({ date: s.date, value: s.value, direction: "up" })),
         type: "scatter", mode: "markers",
-        marker: { symbol: "triangle-up", size: 13, color: theme.colorBrent },
+        marker: { symbol: "triangle-up", size: 13, color: theme.colorA },
         showlegend: false,
+        legendgroup: "spread",
         hoverinfo: "none",
         yaxis: "y2",
         meta: "arrow_up",
@@ -237,8 +246,9 @@ async function fetchAndRender() {
         y: downSpikes.map(s => spreadByDate[s.date] + arrowOffset),
         customdata: downSpikes.map(s => ({ date: s.date, value: s.value, direction: "down" })),
         type: "scatter", mode: "markers",
-        marker: { symbol: "triangle-down", size: 13, color: theme.colorWTI },
+        marker: { symbol: "triangle-down", size: 13, color: theme.colorB },
         showlegend: false,
+        legendgroup: "spread",
         hoverinfo: "none",
         yaxis: "y2",
         meta: "arrow_down",
@@ -275,9 +285,21 @@ async function fetchAndRender() {
         legend: { x: 0, y: 1.12, orientation: "h", font: { size: 12, color: theme.textPrimary } },
     };
 
-    Plotly.newPlot("chart", [traceA, traceB, traceSpread, traceUp, traceDown], layout, { responsive: true });
+    Plotly.newPlot("chart", [traceA, traceB, traceSpread, traceUp, traceDown], layout, {
+        responsive: true,
+        displayModeBar: false,
+        scrollZoom: true,
+    });
 
     const chartEl = document.getElementById("chart");
+
+    chartEl.on("plotly_restyle", () => {
+        const traces = chartEl.data;
+        const isVisible = t => t.visible === true || t.visible === undefined;
+        const y1Visible = traces.some(t => !t.legendgroup && isVisible(t));
+        const y2Visible = traces.some(t => t.legendgroup === "spread" && isVisible(t));
+        Plotly.relayout("chart", { "yaxis.visible": y1Visible, "yaxis2.visible": y2Visible });
+    });
 
     chartEl.on("plotly_click", async (eventData) => {
         const point = eventData.points[0];
@@ -333,12 +355,4 @@ async function fetchAndRender() {
     });
 }
 
-// sync window slider to initial period default
-(function initWindowSlider() {
-    const defaultWindow = windowDefaults[periodSelect.value] || 30;
-    windowSlider.max = Math.max(defaultWindow * 2, 10);
-    windowSlider.value = defaultWindow;
-    windowDisplay.textContent = defaultWindow;
-})();
-
-fetchAndRender();
+initTabs();

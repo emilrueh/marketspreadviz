@@ -5,15 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MarketSpreadViz</title>
+    <link rel="icon" href="/static/favicon.ico">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 
 <body>
-    <div class="tab-bar" id="tab-bar">
-        <button data-tab="oil" class="active">Oil</button>
-        <button data-tab="gas">Gas</button>
-    </div>
+    <div class="tab-bar" id="tab-bar"></div>
     <div class="controls" id="controls">
         <label title="How many divergence spikes to flag (1 = strict, 10 = sensitive)">Sensitivity:
             <span class="range-labels">
