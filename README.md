@@ -47,4 +47,4 @@ Everything works without it though you won't be getting explanations when clicki
 python main.py
 ```
 
-Opens at localhost. Built with FastAPI, vanilla JS, Plotly.js, Yahoo Finance, and Perplexity Sonar.
+Opens at localhost. Built with FastAPI, vanilla JS, Plotly.js, Yahoo Finance, SciPy, and Perplexity Sonar.
